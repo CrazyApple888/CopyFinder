@@ -1,4 +1,5 @@
 import util.Constants.MULTICAST_ADDRESS
+import java.io.IOException
 import java.net.InetAddress
 
 fun main(args: Array<String>) {
@@ -10,5 +11,9 @@ fun main(args: Array<String>) {
         }
     )
     val finder = CopyFinder(address, 8080)
-    finder.start()
+    try {
+        finder.start()
+    } catch (exc: IOException) {
+        exc.printStackTrace()
+    }
 }
