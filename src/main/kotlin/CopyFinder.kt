@@ -1,3 +1,5 @@
+import sun.misc.Signal
+import sun.misc.SignalHandler
 import util.Constants.MAX_OFFLINE_CYCLES
 import util.Constants.SLEEP_TIME
 import util.Constants.SOCKET_TIMEOUT
@@ -16,6 +18,7 @@ class CopyFinder(
     private val multicastSocket = MulticastSocket(port)
     private val users: MutableMap<String, UserInfo> = mutableMapOf()
     private val id = IDGenerator.generate()
+    //@Volatile
     private var isConnected = true
     private var isUpdated = false
 
@@ -30,6 +33,7 @@ class CopyFinder(
         val inPacket = DatagramPacket(buffer, buffer.size)
         val message = id.toByteArray()
         val outPacket = DatagramPacket(message, message.size, address, port)
+        Signal.handle(Signal("INT")) { handleSigInt() }
 
         while (isConnected) {
             multicastSocket.send(outPacket)
@@ -45,6 +49,11 @@ class CopyFinder(
             printUsers()
             Thread.sleep(SLEEP_TIME)
         }
+        multicastSocket.leaveGroup(address)
+    }
+
+    private fun handleSigInt() {
+        isConnected = false
     }
 
     private fun printUsers() {
@@ -83,7 +92,7 @@ class CopyFinder(
             }
             it.value.isChecked = false
         }
-        users.values.removeIf { it.offlineCycles == MAX_OFFLINE_CYCLES }
+        users.values.removeIf { MAX_OFFLINE_CYCLES == it.offlineCycles }
     }
 
     private fun printJoinMessage(joinId: String) {

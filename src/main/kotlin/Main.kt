@@ -10,9 +10,8 @@ fun main(args: Array<String>) {
             MULTICAST_ADDRESS
         }
     )
-    val finder = CopyFinder(address, 8080)
     try {
-        finder.start()
+        CopyFinder(address, 8080).start()
     } catch (exc: IOException) {
         exc.printStackTrace()
     }
