@@ -1,8 +1,6 @@
 package util
 
 object Constants {
-    const val PART_SIZE = 4
-    const val ID_SIZE = 4
     const val MULTICAST_ADDRESS = "224.224.224.224"
     const val SOCKET_TIMEOUT = 100
     const val SLEEP_TIME: Long = 1000

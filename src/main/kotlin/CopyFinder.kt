@@ -1,15 +1,14 @@
 import sun.misc.Signal
-import sun.misc.SignalHandler
 import util.Constants.MAX_OFFLINE_CYCLES
 import util.Constants.SLEEP_TIME
 import util.Constants.SOCKET_TIMEOUT
-import util.IDGenerator
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.MulticastSocket
 import java.net.SocketTimeoutException
 import java.nio.charset.Charset
+import java.util.*
 
 class CopyFinder(
     private val address: InetAddress,
@@ -17,8 +16,7 @@ class CopyFinder(
 ) {
     private val multicastSocket = MulticastSocket(port)
     private val users: MutableMap<String, UserInfo> = mutableMapOf()
-    private val id = IDGenerator.generate()
-    //@Volatile
+    private val id = UUID.randomUUID().toString()
     private var isConnected = true
     private var isUpdated = false
 
@@ -28,7 +26,7 @@ class CopyFinder(
 
     @Throws(IOException::class)
     fun start() {
-        val buffer = ByteArray(IDGenerator.idSize)
+        val buffer = ByteArray(id.length)
         multicastSocket.joinGroup(address)
         val inPacket = DatagramPacket(buffer, buffer.size)
         val message = id.toByteArray()
