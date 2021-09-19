@@ -1,12 +1,10 @@
 import sun.misc.Signal
 import util.Constants.MAX_OFFLINE_CYCLES
 import util.Constants.SLEEP_TIME
-import util.Constants.SOCKET_TIMEOUT
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.MulticastSocket
-import java.net.SocketTimeoutException
 import java.nio.charset.Charset
 import java.util.*
 
@@ -17,13 +15,11 @@ class CopyFinder(
     private val multicastSocket = MulticastSocket(port)
     private val users: MutableMap<String, UserInfo> = mutableMapOf()
     private val id = UUID.randomUUID().toString()
+
     @Volatile
     private var isConnected = true
     private var isUpdated = false
-
-    init {
-        multicastSocket.soTimeout = SOCKET_TIMEOUT
-    }
+    private val monitor = Any()
 
     @Throws(IOException::class)
     fun start() {
@@ -34,19 +30,19 @@ class CopyFinder(
         val outPacket = DatagramPacket(message, message.size, address, port)
         Signal.handle(Signal("INT")) { handleSigInt() }
 
+        Thread {
+            while (isConnected) {
+                updateActiveUsers()
+                printUsers()
+                Thread.sleep(SLEEP_TIME)
+            }
+        }.start()
+
         while (isConnected) {
             multicastSocket.send(outPacket)
-            try {
-                while (true) {
-                    multicastSocket.receive(inPacket)
-                    val tmpMessage = inPacket.data.toString(Charset.defaultCharset()).trim()
-                    processMessage(tmpMessage)
-                }
-            } catch (exc: SocketTimeoutException) {
-                updateActiveUsers()
-            }
-            printUsers()
-            Thread.sleep(SLEEP_TIME)
+            multicastSocket.receive(inPacket)
+            val tmpMessage = inPacket.data.toString(Charset.defaultCharset()).trim()
+            processMessage(tmpMessage)
         }
         multicastSocket.leaveGroup(address)
     }
@@ -59,13 +55,15 @@ class CopyFinder(
         if (isUpdated) {
             return
         }
-        if (users.isEmpty()) {
-            println("$id has no active users")
-            isUpdated = true
-            return
+        synchronized(monitor) {
+            if (users.isEmpty()) {
+                println("$id has no active users")
+                isUpdated = true
+                return
+            }
+            println("$id's active users:")
+            users.forEach { user -> println("${user.key}: ONLINE. ${MAX_OFFLINE_CYCLES - user.value.offlineCycles} seconds will be considered online") }
         }
-        println("$id's active users:")
-        users.forEach { println("${it.key}: ONLINE. ${MAX_OFFLINE_CYCLES - it.value.offlineCycles} seconds will be considered online") }
         isUpdated = true
     }
 
@@ -73,25 +71,29 @@ class CopyFinder(
         if (id == newId) {
             return
         }
-        if (!users.containsKey(newId)) {
-            printJoinMessage(newId)
-            isUpdated = false
-        }
-        users.merge(newId, UserInfo()) { _: UserInfo, new: UserInfo ->
-            new.isChecked = true
-            return@merge new
+        synchronized(monitor) {
+            if (!users.containsKey(newId)) {
+                printJoinMessage(newId)
+                isUpdated = false
+            }
+            users.merge(newId, UserInfo()) { _: UserInfo, new: UserInfo ->
+                new.isChecked = true
+                return@merge new
+            }
         }
     }
 
     private fun updateActiveUsers() {
-        users.forEach {
-            if (!it.value.isChecked) {
-                it.value.offlineCycles++
-                isUpdated = false
+        synchronized(monitor) {
+            users.forEach { user ->
+                if (!user.value.isChecked) {
+                    user.value.offlineCycles++
+                    isUpdated = false
+                }
+                user.value.isChecked = false
             }
-            it.value.isChecked = false
+            users.values.removeIf { userInfo -> MAX_OFFLINE_CYCLES == userInfo.offlineCycles }
         }
-        users.values.removeIf { MAX_OFFLINE_CYCLES == it.offlineCycles }
     }
 
     private fun printJoinMessage(joinId: String) {
