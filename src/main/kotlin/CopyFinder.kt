@@ -17,6 +17,7 @@ class CopyFinder(
     private val multicastSocket = MulticastSocket(port)
     private val users: MutableMap<String, UserInfo> = mutableMapOf()
     private val id = UUID.randomUUID().toString()
+    @Volatile
     private var isConnected = true
     private var isUpdated = false
 
