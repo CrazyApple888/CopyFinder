@@ -1,6 +1,8 @@
+import kotlinx.coroutines.*
 import sun.misc.Signal
 import util.Constants.MAX_OFFLINE_CYCLES
 import util.Constants.SLEEP_TIME
+import util.Constants.SOCKET_TIMEOUT
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -12,6 +14,8 @@ class CopyFinder(
     private val address: InetAddress,
     private val port: Int
 ) {
+
+
     private val multicastSocket = MulticastSocket(port)
     private val users: MutableMap<String, UserInfo> = mutableMapOf()
     private val id = UUID.randomUUID().toString()
@@ -19,10 +23,13 @@ class CopyFinder(
     @Volatile
     private var isConnected = true
     private var isUpdated = false
-    private val monitor = Any()
+
+    init {
+        multicastSocket.soTimeout = SOCKET_TIMEOUT
+    }
 
     @Throws(IOException::class)
-    fun start() {
+    suspend fun start() {
         val buffer = ByteArray(id.length)
         multicastSocket.joinGroup(address)
         val inPacket = DatagramPacket(buffer, buffer.size)
@@ -30,13 +37,7 @@ class CopyFinder(
         val outPacket = DatagramPacket(message, message.size, address, port)
         Signal.handle(Signal("INT")) { handleSigInt() }
 
-        Thread {
-            while (isConnected) {
-                updateActiveUsers()
-                printUsers()
-                Thread.sleep(SLEEP_TIME)
-            }
-        }.start()
+        updateAndPrintUsers()
 
         while (isConnected) {
             multicastSocket.send(outPacket)
@@ -55,15 +56,13 @@ class CopyFinder(
         if (isUpdated) {
             return
         }
-        synchronized(monitor) {
-            if (users.isEmpty()) {
-                println("$id has no active users")
-                isUpdated = true
-                return
-            }
-            println("$id's active users:")
-            users.forEach { user -> println("${user.key}: ONLINE. ${MAX_OFFLINE_CYCLES - user.value.offlineCycles} seconds will be considered online") }
+        if (users.isEmpty()) {
+            println("$id has no active users")
+            isUpdated = true
+            return
         }
+        println("$id's active users:")
+        users.forEach { user -> println("${user.key}: ONLINE. ${MAX_OFFLINE_CYCLES - user.value.offlineCycles} seconds will be considered online") }
         isUpdated = true
     }
 
@@ -71,34 +70,40 @@ class CopyFinder(
         if (id == newId) {
             return
         }
-        synchronized(monitor) {
-            if (!users.containsKey(newId)) {
-                printJoinMessage(newId)
-                isUpdated = false
-            }
-            users.merge(newId, UserInfo()) { _: UserInfo, new: UserInfo ->
-                new.isChecked = true
-                return@merge new
-            }
+        if (!users.containsKey(newId)) {
+            printJoinMessage(newId)
+            isUpdated = false
+        }
+        users.merge(newId, UserInfo()) { _: UserInfo, new: UserInfo ->
+            new.isChecked = true
+            return@merge new
         }
     }
 
     private fun updateActiveUsers() {
-        synchronized(monitor) {
-            users.forEach { user ->
-                if (!user.value.isChecked) {
-                    user.value.offlineCycles++
-                    isUpdated = false
-                }
-                user.value.isChecked = false
+        users.forEach { user ->
+            if (!user.value.isChecked) {
+                user.value.offlineCycles++
+                isUpdated = false
             }
-            users.values.removeIf { userInfo -> MAX_OFFLINE_CYCLES == userInfo.offlineCycles }
+            user.value.isChecked = false
         }
+        users.values.removeIf { userInfo -> MAX_OFFLINE_CYCLES == userInfo.offlineCycles }
     }
 
     private fun printJoinMessage(joinId: String) {
         println("-----------------------------------------------------------------")
         println("$joinId has joined!")
         println("-----------------------------------------------------------------")
+    }
+
+    private suspend fun updateAndPrintUsers() {
+        GlobalScope.launch {
+            while (isConnected) {
+                updateActiveUsers()
+                printUsers()
+                delay(SLEEP_TIME)
+            }
+        }
     }
 }

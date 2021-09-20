@@ -2,7 +2,7 @@ import util.Constants.MULTICAST_ADDRESS
 import java.io.IOException
 import java.net.InetAddress
 
-fun main(args: Array<String>) {
+suspend fun main(args: Array<String>) {
     val address = InetAddress.getByName(
         if (args.isNotEmpty()) {
             args[0]
