@@ -29,7 +29,7 @@ class CopyFinder(
     }
 
     @Throws(IOException::class)
-    suspend fun start() {
+    fun start() {
         val buffer = ByteArray(id.length)
         multicastSocket.joinGroup(address)
         val inPacket = DatagramPacket(buffer, buffer.size)
@@ -97,8 +97,10 @@ class CopyFinder(
         println("-----------------------------------------------------------------")
     }
 
-    private suspend fun updateAndPrintUsers() {
-        GlobalScope.launch {
+
+    //TODO async
+    private fun updateAndPrintUsers() {
+        GlobalScope.async {
             while (isConnected) {
                 updateActiveUsers()
                 printUsers()
