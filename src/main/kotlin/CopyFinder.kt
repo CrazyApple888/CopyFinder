@@ -98,7 +98,6 @@ class CopyFinder(
     }
 
 
-    //TODO async
     private fun updateAndPrintUsers() {
         GlobalScope.async {
             while (isConnected) {
